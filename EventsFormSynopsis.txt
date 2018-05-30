@@ -1,0 +1,89 @@
+Lotus Notes Database Synopsis 
+Form Information
+Name:	(Events)
+Alias:	Events
+Last Modification:	07/09/2015 09:53:16 AM
+Comment:	[Not Assigned]
+Type:	Document	
+Window Title Formula:	"Event Log Entry"
+Include in Compose Menu:	No
+Include in Query by Form:	Yes
+Default Database Form:	No
+Automatically Refresh Fields:	No
+Mail New Documents When Saving:	No
+Store Form In Documents:	No
+Inherit Default Field Values:	No
+Updates Become Responses:	No
+Retain Prior Versions As Responses:	No
+Activate Objects When Composing:	No
+Activate Objects When Editing:	No
+Activate Objects When Reading:	No
+Document Encryption Keys:	[None Assigned]
+Composed Documents May Be Read By:	All Users
+Form May Be Composed By:	All Users
+Subcomponents:
+Field:	formname
+Datatype:	Text
+Help Description:	[Not Assigned]
+Field Type:	Editable
+Sign When Mailing/In Section:	No
+Encryption:	Disabled
+Update Requires Editor Access:	No
+Default Value Formula:	"Agent Log"
+Is Scripted:	No
+Field:	Server
+Datatype:	Author Names
+Help Description:	[Not Assigned]
+Field Type:	Editable
+Sign When Mailing/In Section:	No
+Encryption:	Disabled
+Update Requires Editor Access:	No
+Is Scripted:	No
+Field:	StartTime
+Datatype:	Time
+Time Format:	30/05 10:20:06 PM
+Help Description:	[Not Assigned]
+Field Type:	Editable
+Sign When Mailing/In Section:	No
+Encryption:	Disabled
+Update Requires Editor Access:	No
+Is Scripted:	No
+Field:	Hyphen
+Datatype:	Text
+Help Description:	[Not Assigned]
+Field Type:	Computed for display
+Sign When Mailing/In Section:	No
+Encryption:	Disabled
+Update Requires Editor Access:	No
+Formula:	@V2If(Timespan = ""; " - "; "")
+Is Scripted:	No
+Field:	FinishTime
+Datatype:	Time
+Time Format:	30/05 10:20:06 PM
+Help Description:	[Not Assigned]
+Field Type:	Editable
+Sign When Mailing/In Section:	No
+Encryption:	Disabled
+Update Requires Editor Access:	No
+Is Scripted:	No
+Field:	Events
+Datatype:	Text
+Help Description:	[Not Assigned]
+Field Type:	Editable
+Sign When Mailing/In Section:	No
+Encryption:	Disabled
+Update Requires Editor Access:	No
+Is Scripted:	No
+Field:	Body
+Datatype:	Text
+Help Description:	[Not Assigned]
+Field Type:	Editable
+Sign When Mailing/In Section:	No
+Encryption:	Disabled
+Update Requires Editor Access:	No
+Is Scripted:	No
+JavaScript & HTML Code:
+[None]
+LotusScript Code:
+[None]
+		
