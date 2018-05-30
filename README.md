@@ -3,3 +3,6 @@ These LotusScript files contain utilities I used in a past life when Domino rule
 
 AgentLib.lss
 This file contains the code that needs to be added to a script library for agent logging.  Call the OpenAgentLog function so that agent processing may be recorded.  Please add an events form to track the logging
+
+QuickSort.lss
+Functions to implement sortying in Lotus Script
