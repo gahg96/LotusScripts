@@ -1,0 +1,511 @@
+Option Public
+'Declarations Section
+
+'****Need to get Time in milliseconds
+Type SYSTEMTIME
+	wYear As Integer
+	wMonth As Integer
+	wDayOfWeek As Integer
+	wDay As Integer
+	wHour As Integer
+	wMinute As Integer
+	wSecond As Integer
+	wMilliseconds As Integer
+End Type
+
+Declare Sub GetLocalTime Lib "kernel32.dll" (lpSystemTime As SYSTEMTIME)
+
+Dim localtime As SYSTEMTIME
+
+
+'============================================================================
+' Declare system variables
+'============================================================================
+Dim session As NotesSession
+Dim doc As NotesDocument
+Dim db As NotesDatabase
+Dim MsgStr As String
+Dim debug As Integer
+
+Type LogHeaderDetails 
+	AgentName As String
+	ServerName As String
+	DatabaseName As String
+	ClientID As String
+End Type
+
+
+'*************************************************************************************
+'*                                    AgentLog CLASS                                           *
+'*************************************************************************************
+Class AgentLog
+%REM
+This class is used to handle error logging for agents     
+%END REM
+     '************************************************************
+     ' Declare local variables
+     '************************************************************     
+	Private oDateTime As NotesDateTime
+	Private oLogDb As NotesDatabase
+	Private oLogDoc As NotesDocument
+	Private oLogItem As NotesItem
+	Private oLogHeader As LogHeaderDetails
+	Private oCloseMsg As String      
+	
+	Public oFilePath As String
+     '************************************************************
+     ' Define class properties
+     '************************************************************     
+	
+	Public Property Get IsOpen As Integer
+		
+		If oLogDoc Is Nothing Then
+			IsOpen = False
+		Else
+			IsOpen = True
+		End If
+		
+	End Property
+	
+	Public Property Get FilePath As String
+		FilePath = oFilePath
+	End Property
+	
+     '************************************************************
+     ' Define class methods
+     '************************************************************
+	
+	Sub CloseLog
+		
+		Dim closeStr As String
+		
+		Call oDateTime.SetNow
+		oLogDoc.FinishTime = oDateTime.LSLocalTime
+		
+		If oCloseMsg = "" Then oCloseMsg = "Log Finished."
+		
+		closeStr = oDateTime.LSLocalTime & "      " & oCloseMsg
+		Call oLogItem.AppendToTextList(closeStr)
+		Call oLogDoc.Save(True, True)
+		
+		Delete oLogDoc
+		oCloseMsg = ""
+		
+	End Sub
+	
+	Function CreateEntry(msgStr As String) As Integer
+		
+		Dim eventStr As String
+		
+		Dim localtime As SYSTEMTIME
+		Call GetLocalTime(localtime)
+		
+		
+		Call oDateTime.SetNow
+		'eventStr = oDateTime.LSLocalTime & "      " & msgStr
+		
+		eventStr = Cstr(localtime.wDay)&"-" &Cstr(localtime.wMonth) &"-" &Cstr(localtime.wYear)  &" " & Cstr(localtime.wHour) _
+		&":" & Cstr(localtime.wMinute) &":" & Cstr(localtime.wSecond) &":" & Cstr(localtime.wMilliseconds)  & "      " & msgStr
+		
+		If oLogItem Is Nothing Then
+			Set oLogItem = oLogDoc.ReplaceItemValue("Events", eventStr)
+		Else
+			If oLogItem.ValueLength > 10000 Then
+				oCloseMsg = "Log continues..."
+				Call CloseLog
+				Call CreateLogDoc(oLogDb, oLogDoc, oLogHeader)
+				If oLogItem Is Nothing Then
+					Set oLogItem = oLogDoc.ReplaceItemValue("Events", eventStr)
+				End If
+			Else
+				Call oLogItem.AppendToTextList(eventStr)                    
+			End If
+		End If
+		
+		Call oLogDoc.Save(True, True)
+		
+	End Function    
+	
+	Function CreateError(Module As String, MsgStr As String) As Integer          
+		Dim errorStr As String
+		Call oDateTime.SetNow
+		errorStr = oDateTime.LSLocalTime & "   **ERROR**  <" & module & ">  " & msgStr
+		
+		If oLogItem Is Nothing Then
+			Set oLogItem = oLogDoc.ReplaceItemvalue("Events", errorStr)
+		Else
+			If oLogItem.ValueLength > 10000 Then
+				oCloseMsg = "Log continues..."
+				Call CloseLog
+				Call CreateLogDoc(oLogDb, oLogDoc, oLogHeader)
+				If oLogItem Is Nothing Then
+					Set oLogItem = oLogDoc.ReplaceItemValue("Events", errorStr)
+				End If
+			Else
+				Call oLogitem.AppendToTextList(errorStr)
+			End If
+		End If
+		
+		Call oLogDoc.Save(True, True)          
+	End Function
+	
+	Sub new(agent As String, server As String, database As String, client As String, session As NotesSession)
+		
+		Dim serverName As NotesName
+		
+		Set oDateTime = New NotesdateTime("")
+		
+		Set serverName = New NotesName(server)
+		
+		oLogHeader.AgentName = agent
+		oLogHeader.ServerName = serverName.Abbreviated
+		oLogHeader.DatabaseName = database
+		oLogHeader.ClientID = client
+		
+		Set oLogDb  = session.CurrentDatabase
+		
+		If CreateLogDoc(oLogDb, oLogDoc, oLogHeader) Then
+			Call CreateEntry("Log Started...")
+		Else
+                         'Set error code                         
+		End If
+		
+	End Sub
+	
+	Sub GetFilePath
+		Dim nInStr As Integer
+		
+		nInStr = Instr(Me.oLogDb.FilePath, Me.oLogDb.FileName)
+		oFilePath = Left(Me.oLogDb.FilePath, (nInStr - 1))
+		
+	End Sub
+	
+	
+	Sub Delete
+		
+		If Not oLogDoc Is Nothing Then
+			Call CloseLog               
+		End If
+		
+	End Sub
+	
+End Class
+
+
+
+
+Function CreateLogDoc(oLogDb As NotesDatabase, oLogDoc As NotesDocument, oLogHeader As LogHeaderDetails) As Integer
+	
+	Dim dateTime As New NotesDateTime("")     
+	
+	On Error Goto HandleError
+	
+	Call dateTime.SetNow
+	
+	Set oLogDoc = oLogDb.CreateDocument
+	oLogDoc.Form = "Events"
+	oLogDoc.Agent = oLogHeader.AgentName
+	oLogDoc.Server = oLogHeader.ServerName
+	oLogDoc.Database = oLogHeader.DatabaseName
+	oLogDoc.Client = oLogHeader.ClientID
+	
+	oLogDoc.StartTime = dateTime.LSLocalTime
+	
+	Call oLogDoc.Save(True, True)
+	
+	CreateLogDoc = True
+	
+	Exit Function
+	
+HandleError:
+	CreateLogDoc = False
+	Exit Function
+	
+End Function
+Sub LogMessage(sLogMessage As String)
+     'This will log to the Agent's error log
+	Dim agentLog As New NotesLog(IMPORT_AGENT)    
+	Call agentLog.OpenAgentLog
+	Call agentLog.LogAction(sLogMessage)
+	Call agentLog.Close     
+End Sub
+
+
+
+'*************************************************************************************
+'*                                    AgentLog CLASS                                           *
+'*************************************************************************************
+Class AgentLog
+%REM
+This class is used to handle error logging for agents     
+%END REM
+     '************************************************************
+     ' Declare local variables
+     '************************************************************     
+	Private oDateTime As NotesDateTime
+	Private oLogDb As NotesDatabase
+	Private oLogDoc As NotesDocument
+	Private oLogItem As NotesItem
+	Private oLogHeader As LogHeaderDetails
+	Private oCloseMsg As String      
+	
+	Public oFilePath As String
+     '************************************************************
+     ' Define class properties
+     '************************************************************     
+	
+	Public Property Get IsOpen As Integer
+		
+		If oLogDoc Is Nothing Then
+			IsOpen = False
+		Else
+			IsOpen = True
+		End If
+		
+	End Property
+	
+	Public Property Get FilePath As String
+		FilePath = oFilePath
+	End Property
+	
+     '************************************************************
+     ' Define class methods
+     '************************************************************
+	
+	Sub CloseLog
+		
+		Dim closeStr As String
+		
+		Call oDateTime.SetNow
+		oLogDoc.FinishTime = oDateTime.LSLocalTime
+		
+		If oCloseMsg = "" Then oCloseMsg = "Log Finished."
+		
+		closeStr = oDateTime.LSLocalTime & "      " & oCloseMsg
+		Call oLogItem.AppendToTextList(closeStr)
+		Call oLogDoc.Save(True, True)
+		
+		Delete oLogDoc
+		oCloseMsg = ""
+		
+	End Sub
+	
+	Function CreateEntry(msgStr As String) As Integer
+		
+		Dim eventStr As String
+		
+		Dim localtime As SYSTEMTIME
+		Call GetLocalTime(localtime)
+		
+		
+		Call oDateTime.SetNow
+		'eventStr = oDateTime.LSLocalTime & "      " & msgStr
+		
+		eventStr = Cstr(localtime.wDay)&"-" &Cstr(localtime.wMonth) &"-" &Cstr(localtime.wYear)  &" " & Cstr(localtime.wHour) _
+		&":" & Cstr(localtime.wMinute) &":" & Cstr(localtime.wSecond) &":" & Cstr(localtime.wMilliseconds)  & "      " & msgStr
+		
+		If oLogItem Is Nothing Then
+			Set oLogItem = oLogDoc.ReplaceItemValue("Events", eventStr)
+		Else
+			If oLogItem.ValueLength > 10000 Then
+				oCloseMsg = "Log continues..."
+				Call CloseLog
+				Call CreateLogDoc(oLogDb, oLogDoc, oLogHeader)
+				If oLogItem Is Nothing Then
+					Set oLogItem = oLogDoc.ReplaceItemValue("Events", eventStr)
+				End If
+			Else
+				Call oLogItem.AppendToTextList(eventStr)                    
+			End If
+		End If
+		
+		Call oLogDoc.Save(True, True)
+		
+	End Function    
+	
+	Function CreateError(Module As String, MsgStr As String) As Integer          
+		Dim errorStr As String
+		Call oDateTime.SetNow
+		errorStr = oDateTime.LSLocalTime & "   **ERROR**  <" & module & ">  " & msgStr
+		
+		If oLogItem Is Nothing Then
+			Set oLogItem = oLogDoc.ReplaceItemvalue("Events", errorStr)
+		Else
+			If oLogItem.ValueLength > 10000 Then
+				oCloseMsg = "Log continues..."
+				Call CloseLog
+				Call CreateLogDoc(oLogDb, oLogDoc, oLogHeader)
+				If oLogItem Is Nothing Then
+					Set oLogItem = oLogDoc.ReplaceItemValue("Events", errorStr)
+				End If
+			Else
+				Call oLogitem.AppendToTextList(errorStr)
+			End If
+		End If
+		
+		Call oLogDoc.Save(True, True)          
+	End Function
+	
+	Sub new(agent As String, server As String, database As String, client As String, session As NotesSession)
+		
+		Dim serverName As NotesName
+		
+		Set oDateTime = New NotesdateTime("")
+		
+		Set serverName = New NotesName(server)
+		
+		oLogHeader.AgentName = agent
+		oLogHeader.ServerName = serverName.Abbreviated
+		oLogHeader.DatabaseName = database
+		oLogHeader.ClientID = client
+		
+		Set oLogDb  = session.CurrentDatabase
+		
+		If CreateLogDoc(oLogDb, oLogDoc, oLogHeader) Then
+			Call CreateEntry("Log Started...")
+		Else
+                         'Set error code                         
+		End If
+		
+	End Sub
+	
+	Sub GetFilePath
+		Dim nInStr As Integer
+		
+		nInStr = Instr(Me.oLogDb.FilePath, Me.oLogDb.FileName)
+		oFilePath = Left(Me.oLogDb.FilePath, (nInStr - 1))
+		
+	End Sub
+	
+	
+	Sub Delete
+		
+		If Not oLogDoc Is Nothing Then
+			Call CloseLog               
+		End If
+		
+	End Sub
+	
+End Class
+
+
+
+Function CreateLogDoc(oLogDb As NotesDatabase, oLogDoc As NotesDocument, oLogHeader As LogHeaderDetails) As Integer
+	
+	Dim dateTime As New NotesDateTime("")     
+	
+	On Error Goto HandleError
+	
+	Call dateTime.SetNow
+	
+	Set oLogDoc = oLogDb.CreateDocument
+	oLogDoc.Form = "Events"
+	oLogDoc.Agent = oLogHeader.AgentName
+	oLogDoc.Server = oLogHeader.ServerName
+	oLogDoc.Database = oLogHeader.DatabaseName
+	oLogDoc.Client = oLogHeader.ClientID
+	
+	oLogDoc.StartTime = dateTime.LSLocalTime
+	
+	Call oLogDoc.Save(True, True)
+	
+	CreateLogDoc = True
+	
+	Exit Function
+	
+HandleError:
+	CreateLogDoc = False
+	Exit Function
+	
+End Function
+
+Sub LogMessage(sLogMessage As String)
+     'This will log to the Agent's error log
+	Dim agentLog As New NotesLog(IMPORT_AGENT)    
+	Call agentLog.OpenAgentLog
+	Call agentLog.LogAction(sLogMessage)
+	Call agentLog.Close     
+End Sub
+
+
+%REM
+Sample usage
+%ENDREM
+
+'Declare Agent Log Objects
+Dim agentlog As AgentLog
+Dim agent As NotesAgent
+Dim agentname As String
+Dim servername As String
+Dim dbname As String
+Dim clientname As String
+
+Dim oCurrentDb As NotesDatabase
+
+Dim oSession As NotesSession
+Dim oDatabaseProcessed As NotesDatabase
+Dim oClientsView As NotesView
+
+Dim oProfileDoc As NotesDocument ' the profile document
+
+Dim oMemo As NotesDocument
+Dim oEmailError As Variant
+Sub Initialize	
+	Set oSession = New NotesSession
+	Set oCurrentDb = oSession.CurrentDatabase
+	
+     'Open the agent log so that agent processing may be recorded.
+	If  OpenAgentLog(oSession) Then
+		'Get the profile
+		Set oProfileDoc = oCurrentDb.GetProfileDocument("LOOKPRO")
+		If (oProfileDoc Is Nothing) Then
+			'need a profile doc to get files
+			'Call agentlog.CreateEntry( "Could not find profile document.  Exiting agent." )
+			Call AgentLog.CreateError("Transfer From Notes To TRIM", "Could not find a Lookup Profile document.")     
+			Exit Sub
+		Else
+			Set oDatabaseProcessed = oSession.GetDatabase(oCurrentDb.Server, "C:\Domino7\data\PROD-OPG\Client Database.nsf") 
+			If oDatabaseProcessed Is Nothing Then
+				Print "Unable to locate Client database"
+				Exit Sub
+			End If
+			Set oClientsView = oDatabaseProcessed.GetView("vLkClientNumber")
+			Set oMemo = oCurrentDb.CreateDocument								
+			oMemo.Form = "Memo"
+			oMemo.SendTo = oProfileDoc.GetItemValue("namNotifyAdmin")                    				
+			oMemo.Subject = "Checking Order Status"    				
+			Set oEmailError = New NotesRichTextItem( oMemo , "Body" ) 							
+			
+		' add doc link
+			Call oEmailError.AppendText("The following errors from the transfer process were validated ")
+			Call oEmailError.AddNewLine(2, False)				
+			
+		'Start the Validate routine
+			Call ValidateData("C:\Test\Export\FILENOTES\File Notes_Incoming_Error.csv")
+			
+		End If
+		
+		
+	End If
+	
+End Sub
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
