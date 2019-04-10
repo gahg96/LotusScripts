@@ -1,0 +1,63 @@
+Function CreateCopy(sourceDb As NotesDatabase, destServer As String, destPath As String, destFileName As String) As NotesDatabase 
+	On Error Goto BubbleError 
+   ' Create a copy of the passed-in database by creating a new replica, then changing 
+   ' the replica ID of the new replica to something unique. 
+	Dim tempDb As New NotesDatabase("", "") 
+	Dim session As NotesSession 
+	Dim destDb As NotesDatabase 
+	Dim dataDir As String 
+	Dim tempFileName As String 
+	
+   ' Make sure the destination database does not already exist 
+	Set session = sourceDb.Parent 
+	On Error Resume Next 
+	Set destDb = session.GetDatabase(destServer, destPath, False) 
+	If Not destDb.IsOpen Then Call destDb.Open("", "") 
+	If Not destDb.IsOpen Then Set destDb = Nothing 
+	On Error Goto 0 
+	If Err <> 0 Then 
+		Err = 0 
+		Set destDb = Nothing 
+	End If 
+%REM
+We start out by making sure the destination database does not already exist. If it does already exist, this function will not replace the database. 
+A possible enhancement to this function would be an additional boolean parameter to indicate if an overwrite is allowed or not. If the database does not exist,
+then the variable destDb is set to Nothing. 
+%ENDREM
+	
+   ' If the destination database does not exist, then create the replica 
+	If destDb Is Nothing Then 
+      ' Get the full path to a random file name in the user's data directory 
+		dataDir = destPath  'session.GetEnvironmentString("Directory", True) 
+		tempFileName = destPath + destFileName 'RandomFileName(dataDir, "nsf") 
+      ' If the RandomFileName function returned an empty string, just specify some file name 
+		If tempFileName = "" Then tempFileName = "temp.nsf" 
+%REM
+      ' Pull out the directory info so only the file name remains 
+		If Instr(tempFileName, dataDir) <> 0 Then tempFileName = Strright(tempFileName, dataDir) 
+		If Left(tempFileName, 1) = "\" Or Left(tempFileName, 1) = "/" Then tempFileName = Mid(tempFileName, 2) 
+      ' Create an empty database from our random file name 
+%END REM
+		' Create an empty database from our passed file name 
+		Call tempDb.Create("", destFileName, True) 
+%REM
+The next part of the code creates a brand new local database. This will be used in the call to the ChangeReplicaID function. This assures that the replica ID, after we're done, will be a unique value. The brand new local database is only used temporarily - it will be deleted at the bottom of this function. Note that we use the RandomFileName function to make sure the local file we're creating doesn't already exist. This is more reliable than hard-coding a file name. Also note that the RandomFileName function returns the full path to the file name (including the directory). For the Create method, we don't want the full path - we just want the relative path. 
+%ENDREM
+      ' Create a replica of the source database to the destination server 
+		If Not sourceDb.IsOpen Then Call sourceDb.Open("", "")
+		Dim sReplicaWithPath As String
+		sReplicaWithPath = tempFileName
+		Set destDb = sourceDb.CreateReplica(destServer, sReplicaWithPath) 
+		If Not destDb.IsOpen Then Call destDb.Open("", "") 
+%REM
+		If Not ChangeReplicaID(tempDb, destDb) Then ' If the destination db's replica ID was not changed 
+			Set destDb = Nothing 
+		End If 
+%END REM
+		Call tempDb.Remove 
+	End If 
+	Set CreateCopy = destDb 
+	Exit Function 
+BubbleError: 
+	Error Err, Error$ & Chr$(10) & " in procedure " & Getthreadinfo(1) & ", line " & Cstr(Erl) 
+End Function 
