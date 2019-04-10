@@ -1,0 +1,70 @@
+Sub Export(filePath As String, sourceView As NotesView)
+	%REM
+	Sub Export
+	Description: Comments for Sub
+	%END REM
+	On Error GoTo LogErr
+	
+	Dim s As New NotesSession
+	Dim ec As NotesViewEntryCollection
+	Dim ent As NotesViewEntry
+	Dim valString As String
+	Dim myStream As NotesStream
+	Dim fileNum As Integer, count As Integer, x As Integer
+	
+	'Open the file
+	Set myStream = s.Createstream()
+	Call myStream.Open(filePath, "ASCII")
+	Call myStream.Truncate()
+
+	'Write header row
+	count = sourceView.Columncount
+	ForAll v In sourceView.Columns
+		'If final value, add carriage return, else add comma
+		If v.Position = count Then
+			Call myStream.Writetext(v.Title, 0)
+		Else
+			Call myStream.Writetext(v.Title & ",")
+		End If
+	End ForAll
+	
+	'Write line for each entry
+	Set ec = sourceView.Allentries
+	Set ent = ec.Getfirstentry()
+	While Not ent Is Nothing
+		x = 1
+		ForAll v In ent.Columnvalues
+			'If multi-value, join into single string surrounded by quotes.
+			'If value has a comma, surround with quotes
+			If IsArray(v) Then
+				valString = |"| & Join(v, ",") & |"|
+			Else
+				If InStr(v, ",") > 0 Then
+					valString = |"| & v & |"|
+				Else
+					valString = v
+				End If
+			End If
+			
+			'If final value, add carriage return, else add comma
+			If x = count Then
+				Call myStream.Writetext(valString, 0)
+			Else
+				Call myStream.Writetext(valString & ",")
+			End If
+			x = x + 1
+		End ForAll
+		Set ent = ec.Getnextentry(ent)
+	Wend
+	
+closeFile:
+	'Close the file
+	Call myStream.Close()
+	
+	Exit Sub
+	
+
+LogErr:
+	'Call LogError()
+	Resume closeFile	
+End Sub
