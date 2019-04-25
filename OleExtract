@@ -1,0 +1,117 @@
+%REM
+	Agent OleExtract
+	Created Sep 16, 2015 by Subroto Pant/DEV
+	Description: Comments for Agent
+%END REM
+Option Public
+Option Explicit
+
+Sub Initialize
+	'** This agent will take all the selected documents in a database and
+	'** uses OLE to open the embedded files with their
+	'** default applications and save them to the file system.  
+	'**
+	'** Obviously, this will only work if the computer you're running this agent on
+	'** has MS Office installed. I have the code set up to run against "Selected
+	'** Documents" in a view, although you can easily change it to run against
+	'** all the docs in the database or some subset thereof.
+	'**
+	'** version 1.0 -- initial release
+
+	On Error GoTo processError
+
+	'** variables relating to this database (this database should be the MS Office Library)
+	Dim session As New NotesSession
+	Dim db As NotesDatabase
+	Dim dc As NotesDocumentCollection
+	Dim doc As NotesDocument
+	Dim rtitem As NotesRichTextItem
+	Dim oleObj As Variant
+
+	Set db = session.CurrentDatabase
+	Set dc = db.UnprocessedDocuments
+	Set doc = dc.GetFirstDocument
+
+	'** variables relating to the database we're exporting to
+	Dim body As NotesRichTextItem
+	Dim tempDir As String
+	Dim fileCount As Integer
+	Dim fileName As String
+	Dim fname As String
+
+	tempDir = "C:\temp\"
+
+	'** try to export all the selected docs
+	Do Until (doc Is Nothing)
+		Set rtitem = doc.GetFirstItem("Body")
+		fileCount = 0
+		fileName = ""
+
+		If Not (rtitem Is Nothing) Then
+			If Not (IsEmpty(rtitem.EmbeddedObjects)) Then
+				ForAll o In rtitem.EmbeddedObjects
+					If (o.Type = EMBED_OBJECT) Then
+						'** if we have an embedded object in the rich text field,
+						'** we'll try to save it as a file and attach it to our new doc
+						fileCount = fileCount + 1
+						fileName = tempDir & "detachedOleFile" & fileCount
+
+						'** for MS Office documents, this normally works (of course,
+						'** you need to make sure that a proper version of Office is
+						'** installed on the computer you're doing this on), although
+						'** you'll often get an error or two as you call these methods,
+						'** due to variations in the different Office object models
+						Set oleObj = o.Activate(True)
+						'** this is so office applications don't end up being hidden
+						oleObj.Application.Windows(oleObj.Application.Windows.Count).Visible = True
+						Call oleObj.SaveAs(fileName)
+						Call oleObj.Close
+						'** try two different ways to shut down the background application
+						Call oleObj.Quit
+						Call oleObj.Application.Quit
+						Set oleObj = Nothing
+
+						'** usually, MS Office will automatically append a file extension
+						'** to the end of the file name, so we'll have to use Dir to make
+						'** sure we get the file we just detached
+						fname = Dir$(fileName & "*", 0)
+						If (fname = "") Then
+							fileCount = fileCount - 1
+						Else
+							fName = tempDir & fName
+							Print fName
+							'use this file name and upload to TRIM
+							'Call body.EmbedObject(EMBED_ATTACHMENT, "", fName)
+							'dont want to delete Kill fname
+						End If
+					End If
+				End ForAll
+			End If
+
+			If (fileCount < 1) Then
+				MsgBox "No ole object"
+			End If
+		End If
+
+		Set doc = dc.GetNextDocument(doc)
+	Loop
+
+	Print "Finished exporting " & dc.Count & " docs"
+	Exit Sub
+
+processError:
+	'** more than likely, our errors will have to do with OLE issues,
+	'** so we're going to be daring and Resume Next when we
+	'** see any problems (this process is actually quite error-prone,
+	'** due to differences in all the versions of all the MS Office OLE
+	'** function libraries)
+	Dim errMsg As String
+	If Err <> 207 Then
+		'MessageBox ("An Error has occurred # :" & Err)
+		errMsg = "Error " & Err & ": " & Error$
+		Print errMsg
+	End If
+	
+	Resume Next
+
+End Sub
