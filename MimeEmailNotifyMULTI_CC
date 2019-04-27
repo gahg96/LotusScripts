@@ -18,7 +18,7 @@ This is done to ensure that the Notes link is a clickable link.
 	oDocMemo.Subject = subject
 	
 	Dim strFrom As String
-	strFrom = "" 'TODO: DO WE NEED A NAME?
+	strFrom = "" 'IF A NAME IS REQUIRED PUT IT HERE
 	
 	Dim mimeRoot As NotesMIMEEntity
 	Dim mime As NotesMIMEEntity
@@ -50,17 +50,17 @@ This is done to ensure that the Notes link is a clickable link.
 	Call copyToMulti.CopyItemToDocument(oDocMemo, "CopyTo")
 	
 %REM
-TODO: IS A FROM NAME REQUIRED??
+IF A FROM NAME REQUIRED 
 	Set oNMHeader = mime.CreateHeader("tmpFrom")
-	Call oNMHeader.setheaderval(VCT_MAIL_NAME )	
+	Call oNMHeader.setheaderval(VCT_MAIL_NAME ) 'Constant for mail	
 	
-	oDocMemo.TmpFrom = |VCT_MAIL_NAME <| + strFrom + |@agd.nsw.gov.au>|
+	oDocMemo.TmpFrom = |VCT_MAIL_NAME <| + strFrom + |@dummy_email.gov.au>|
 	oDocMemo.TmpDisplaySentBy = VCT_MAIL_NAME
-	oDocMemo.InetFrom = |VCT_MAIL_NAME <| + strFrom + |@agd.nsw.gov.au>|
+	oDocMemo.InetFrom = |VCT_MAIL_NAME <| + strFrom + |@dummy_email.gov.au>|
 	' Principal overrides From
 	' Must be formatted as below and must include the domain @xyz.com
 	' Format should equal: "From User" <fromuser@xyz.com@DOMAIN>
-	oDocMemo.Principal = |VCT_MAIL_NAME <| + strFrom + |@agd.nsw.gov.au>|
+	oDocMemo.Principal = |VCT_MAIL_NAME <| + strFrom + |@dummy_email.gov.au>|
 %END REM
 	
 	Call oDocMemo.Send(False)	
