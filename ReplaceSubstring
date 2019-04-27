@@ -1,0 +1,20 @@
+Function ReplaceSubstring(inputStr As String, fromStr As String, toStr As String) As String
+	
+' This function acts similarly to the @Formula language function '@ReplaceSubstring'
+	
+	Dim newStr As String
+	'Dim position As Integer
+	Dim position As Long
+	
+	
+	newStr = inputStr
+	
+	'While Instr(newStr, fromStr) > 0
+	While Instr(newStr, fromStr) <> 0
+		position = Instr(newStr, fromStr)
+		newStr = Left$(newStr, position - 1) + toStr + Right$(newStr, Len(newStr) - (position + Len(fromStr) - 1))
+	Wend
+	
+	ReplaceSubstring = newStr
+	
+End Function
