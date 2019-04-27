@@ -1,0 +1,38 @@
+Sub TrimAndUnique( doc As NotesDocument, szFieldName As String)
+%REM
+Removes duplicates and blanks from the textlist field
+%END REM
+	
+	Dim niNew As NotesItem
+	Dim niField As NotesItem
+	Dim docTemp As NotesDocument
+	
+	' Error Handler
+	On Error Goto Error_Handler
+	
+	Set niField = doc.GetFirstItem( szFieldName )
+	If niField Is Nothing Then Exit Sub
+	Set docTemp = doc.ParentDatabase.CreateDocument()
+	Set niNew = New NotesItem(docTemp, "TEMP", "")
+	
+     'loop through all the items
+	Forall value In niField.Values
+          'copy values across if they don't already exist or are not blanks
+		If Not (value = "" Or niNew.Contains(value) ) Then
+			Call niNew.AppendTotextList(value)
+		End If
+	End Forall
+	
+     'remove the old item from the note, and replace it with the trimmed,unique version
+	Call niField.Remove()
+	Call niNew.CopyItemToDocument(doc, szFieldName)
+     'required reset if the item is to be used after the call to this sub
+	Set niField = doc.GetFirstItem(szFieldName)
+	niField.IsSummary = True   '--- to make this field can be displayed in view
+	
+	Exit Sub
+	
+Error_Handler:
+	'Do some error handling here
+	Exit Sub
+End Sub
