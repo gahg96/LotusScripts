@@ -1,0 +1,71 @@
+Sub  MimeEmailNotify (subject As String, sMessage As String)
+	Dim oNotesSession As New NotesSession
+	Dim oCurrentDB As NotesDatabase	
+	Set oCurrentDB=oNotesSession.CurrentDatabase
+	
+	Dim serverName As NotesName	
+	Set serverName = New NotesName(oCurrentDB.Server)
+	
+	Dim oDocMemo As NotesDocument
+	Dim mimeRoot As NotesMIMEEntity
+	Dim mime As NotesMIMEEntity
+	Dim oNMHeader As NotesMIMEHeader
+	Dim oNotesStream As NotesStream
+	Dim sHtml As String
+	
+	oNotesSession.ConvertMime = False
+	
+	Set oDocMemo = New NotesDocument (oCurrentDB)
+	oDocMemo.Form = "Memo"
+	
+	Set mimeRoot = oDocMemo.Createmimeentity
+	Set mime = mimeRoot.Createchildentity
+	
+	sHtml = ""&_
+	sMessage 
+	
+	Set oNotesStream = oNotesSession.CreateStream
+	Call oNotesStream.WriteText(sHtml)
+	Call mime.SetContentFromText(oNotesStream,"text/html",ENC_NONE)
+	Call oNotesStream.Close
+	
+	Set oNMHeader = mimeRoot.Getnthheader("Content-Type")
+	Call oNMHeader.SetHeaderval("multipart/related") 
+	
+	Set oNMHeader = mime.CreateHeader("Subject")
+	Call oNMHeader.Setheaderval(subject)
+	
+	Set oNMHeader = mime.CreateHeader("To")
+	If (serverName.Common = DEBUG_SERVER_NAME) Then 
+		oDocMemo.Subject = "TEST EMAIL: " &subject
+		oDocMemo.SendTo =  VCT_MAIL_BOX_DEBUG ' The user for testing
+		Call oNMHeader.SetHeaderval(VCT_MAIL_BOX_DEBUG)
+	Else		
+		oDocMemo.Subject = subject
+		oDocMemo.SendTo =  VCT_MAIL_BOX
+		Call oNMHeader.SetHeaderval(VCT_MAIL_BOX)
+	End If
+	
+	Set oNMHeader = mime.CreateHeader("tmpFrom")
+	Call oNMHeader.setheaderval(VCT_MAIL_NAME )	
+	
+	Set oNMHeader = mime.CreateHeader("Principal")
+	Call oNMHeader.setheaderval(VCT_MAIL_BOX  )	
+	
+	oDocMemo.ReplyTo = VCT_MAIL_BOX 
+	oDocMemo.tmpFrom = VCT_MAIL_NAME                           'Alias for senders name does not work for internet email in Notes R4x
+	oDocMemo.Principal = VCT_MAIL_NAME                           'Principal field works for internet Email in Notes R5x
+	oDocMemo.TmpDisplaySentBy = VCT_MAIL_NAME 
+	
+	Call oDocMemo.Send(False)
+	
+	
+	Print " --- Agent:ProcessNewApplication inside MimeEmailNotify before send " & Date$ & " .... " & Time$   
+	Call oDocMemo.Send(False)
+	Print " --- Agent:ProcessNewApplication inside MimeEmailNotify after send " & Date$ & " .... " & Time$   
+	
+	oNotesSession.ConvertMime = True
+	
+End Sub
+
+
