@@ -1,0 +1,93 @@
+Declarations:
+Type TIMEDATE
+	Innards(1) As Long 
+End Type 
+
+Type DBREPLICAINFO
+	ID As TIMEDATE
+	Flags As Integer 
+	CutoffInterval As Integer 
+	Cutoff As TIMEDATE
+End Type 
+
+Function ChangeReplicaID(source As NotesDatabase, dest As NotesDatabase) As Integer 
+	Dim fullPath As String*256 
+	Dim hDb As Long 
+	Dim status As Integer 
+	Dim replicaInfo As DBREPLICAINFO 
+	Dim compare As String 
+	Dim destCompare As String 
+	
+   ' Open up the source database 
+	Call W32_OSPathNetConstruct(0, source.Server, source.FilePath, fullPath) 
+	status = W32_NSFDbOpen(fullPath, hDb) 
+	If status <> 0 Then 
+		ChangeReplicaID = False 
+		Exit Function ' ========== 
+	End If 
+   ' Get the replica ID of the source database 
+	status = W32_NSFDbReplicaInfoGet(hDb, replicaInfo) 
+	If status <> 0 Then 
+		ChangeReplicaID = False 
+		Exit Function ' ========== 
+	End If 
+	
+%REM
+The first part of the function opens up the source database. Take note of how the fullPath variable is defined. When dealing with the Notes API, it can't dynamically size a string. So if one of the parameters to an API function is a string that will be populated by the function, then you have to make sure the string has enough room for the return value. In this code, the string is sized to 256 characters. You could also define a string and then populate the string with a series of characters (ASCII value 0). 
+	
+The first API function builds the "API version" of the path to the database. For a local database, it is the path to the database. For a server database, it is the server name, then two exclamation points, then the path to the database. But instead of relying on the code to figure out the "API version", we just call a function to tells what the value should be. 
+	
+If the source database could not be opened, or the replica information could not be read, the function returns the value False indicating that the replica information was not changed. 
+	
+%END REM
+   ' Put the replica ID in a string format so we can compare later on if the change took 
+	compare = Right("0000000" + Hex(replicaInfo.ID.Innards(1)), 8) 
+	compare = compare + Right("0000000" + Hex(replicaInfo.ID.Innards(0)), 8) 
+   ' Close the source database - the replica info has been captured 
+	status = W32_NSFDbClose(hDb) 
+   ' Make sure what we captures is legit - it should match the database property 
+	If compare <> source.ReplicaID Then 
+		ChangeReplicaID = False 
+		Exit Function ' ========== 
+	End If 
+	
+%REM
+The next part of the function makes sure that the replica information that was read is the correct value. There's a NotesDatabase property called ReplicaID that gives the replica id. So we take what was read in by the API and format it to be the same as the database property. Then we can compare them to see if what the API read to see if we were really reading the value through the API, or if the API was just saying it was read. 
+%END REM
+	
+   ' Open up the destination database 
+	Call W32_OSPathNetConstruct(0, dest.Server, dest.FilePath, fullPath) 
+	status = W32_NSFDbOpen(fullPath, hDb) 
+	If status <> 0 Then 
+		ChangeReplicaID = False 
+		Exit Function ' ========== 
+	End If 
+   ' Attempt to set the replica ID on the destination database 
+	status = W32_NSFDbReplicaInfoSet(hDb, replicaInfo) 
+	If status <> 0 Then 
+		ChangeReplicaID = False 
+		Exit Function ' ========== 
+	End If 
+	
+%REM
+The next part of the function sets the replica ID on the destination database through the API. We have to create a path and open the database in the same way we did for the source database. 
+%END REM
+	
+   ' See if the change was successful 
+	status = W32_NSFDbReplicaInfoGet(hDb, replicaInfo) 
+	If status <> 0 Then 
+		ChangeReplicaID = False 
+		Exit Function ' ========== 
+	End If 
+   ' Compare what the replica ID is now to the source database 
+	destCompare = Right("0000000" + Hex(replicaInfo.ID.Innards(1)), 8) 
+	destCompare = destCompare + Right("0000000" + Hex(replicaInfo.ID.Innards(0)), 8) 
+   ' Close the destination database 
+	status = W32_NSFDbClose(hDb) 
+   ' If the destination matches the source, then the change was a success 
+	If destCompare = compare Then 
+		ChangeReplicaID = True 
+	Else 
+		ChangeReplicaID = False 
+	End If 
+End Function 
