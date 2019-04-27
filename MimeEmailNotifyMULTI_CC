@@ -1,0 +1,69 @@
+Sub MimeEmailNotifyMULTI_CC (oCurrentDB As NotesDatabase, _
+oNotesSession As NotesSession, _
+sendToMulti As NotesItem, _
+copyToMulti As NotesItem, subject As String, _
+sMessage As String)
+%REM
+Subroutine to send an email to multiple users in the MIME format.  This procedure also sends a copyto to the specified recipients.
+This is done to ensure that the Notes link is a clickable link.
+%END REM
+	
+	oNotesSession.ConvertMime = False	
+	Dim serverName As NotesName	
+	Set serverName = New NotesName(oCurrentDB.Server)
+	
+	Dim oDocMemo As NotesDocument
+	Set oDocMemo = New NotesDocument (oCurrentDB)
+	oDocMemo.Form = "Memo"
+	oDocMemo.Subject = subject
+	
+	Dim strFrom As String
+	strFrom = "" 'TODO: DO WE NEED A NAME?
+	
+	Dim mimeRoot As NotesMIMEEntity
+	Dim mime As NotesMIMEEntity
+	
+	Set mimeRoot = oDocMemo.Createmimeentity
+	Set mime = mimeRoot.Createchildentity
+	
+	Dim sHtml As String
+	sHtml = ""&_
+	sMessage 
+	
+	Dim oNotesStream As NotesStream
+	Set oNotesStream = oNotesSession.CreateStream
+	Call oNotesStream.WriteText(sHtml)
+	Call mime.SetContentFromText(oNotesStream,"text/html",ENC_NONE)
+	Call oNotesStream.Close
+	
+	Dim oNMHeader As NotesMIMEHeader
+	Set oNMHeader = mimeRoot.Getnthheader("Content-Type")
+	Call oNMHeader.SetHeaderval("multipart/related") 
+	
+	Set oNMHeader = mime.CreateHeader("Subject")
+	Call oNMHeader.Setheaderval(subject)
+	
+	Set oNMHeader = mime.CreateHeader("To")
+	'Call oNMHeader.SetHeaderval(sendTo.Abbreviated)
+	'oDocMemo.SendTo =  sendTo.Abbreviated
+	Call sendToMulti.CopyItemToDocument(oDocMemo, "SendTo")	
+	Call copyToMulti.CopyItemToDocument(oDocMemo, "CopyTo")
+	
+%REM
+TODO: IS A FROM NAME REQUIRED??
+	Set oNMHeader = mime.CreateHeader("tmpFrom")
+	Call oNMHeader.setheaderval(VCT_MAIL_NAME )	
+	
+	oDocMemo.TmpFrom = |VCT_MAIL_NAME <| + strFrom + |@agd.nsw.gov.au>|
+	oDocMemo.TmpDisplaySentBy = VCT_MAIL_NAME
+	oDocMemo.InetFrom = |VCT_MAIL_NAME <| + strFrom + |@agd.nsw.gov.au>|
+	' Principal overrides From
+	' Must be formatted as below and must include the domain @xyz.com
+	' Format should equal: "From User" <fromuser@xyz.com@DOMAIN>
+	oDocMemo.Principal = |VCT_MAIL_NAME <| + strFrom + |@agd.nsw.gov.au>|
+%END REM
+	
+	Call oDocMemo.Send(False)	
+	oNotesSession.ConvertMime = True
+	
+End Sub
