@@ -1,0 +1,326 @@
+Option Base 1
+Option Public
+%INCLUDE "lsconst.lss"
+Dim db As NotesDatabase
+Dim strErrorMsg As String
+Dim msgString As String
+Dim attachmentFolder As String
+Dim intFileName As Integer
+Sub Initialize
+	Dim session As New NotesSession
+	Dim dbTitle As String
+	Dim fileFolder As String
+	Dim fileName As String
+	Dim fileNum As Integer
+	Dim headerstring As String
+	Dim headerInnerFlds As String
+	Dim szInnerFields As String
+	Dim fieldNames() As String
+	Dim values As String
+	Dim selection As String
+	Dim collection As NotesDocumentCollection
+	Dim doc As notesdocument
+	Dim item As notesitem
+	Dim  richtitem As NotesRichTextItem
+	Dim szAttachmentNames As String
+	Dim newAttachments As String
+	'Dim msgString As String
+	Dim msgString2 As String
+	Dim fldIndex As Integer
+	Dim formfield As String
+	Dim intRecords As Long
+	Dim szRecords As String
+	Dim intValue As Integer	
+	Dim intCount As Integer
+	'On Error Goto Error_Handler  ' for checking purpose  -If there is no error emailed then will get the same results as  On Error  Resume Next 
+	On Error  Resume Next     'for real run
+	Set db = session.CurrentDatabase
+	strErrorMsg = ""	
+	'use a hard coded value or a profile document if you want to save to a specific location
+	'fileFolder =  "C:\Extract\" 	
+	'attachmentFolder =  fileFolder &"\Attachments\" 
+	fileFolder = Environ("Temp") & "\" ' Get System TEMP Variable so we can store the attachments there for now.          	
+	attachmentFolder =  fileFolder 
+	headerInnerFlds =""
+	headerstring=""
+	Forall form In db.Forms
+		If  (form.Name = "Word Letter") Then
+			'If Not (Isempty(form.Fields)) Then
+			szRecords = ""
+			fldIndex= 0
+			msgString = ""
+			msgString2=""
+			fileNum% = Freefile()
+			fileName$ = fileFolder & db.Title &"_" & form.Name & ".csv"
+			headerInnerFlds="NoteID" & |","| & "UniversalID" & |","| & "NoteCreatedDate" & |","| & "NotesModifiedDate" & |"|
+			Open FileName$ For Output As fileNum%
+			Forall field In form.Fields
+				msgString = msgString & Chr(10) & "     " & field &|",| 
+				fldIndex =  fldIndex + 1  
+				intCount = fldIndex +4
+				If  fldIndex = 1 Then
+					headerstring= headerInnerFlds & |,"| &  field & |"|
+					Redim  fieldNames(1)
+				Else
+					headerstring= headerstring & |,"| &  field & |"|
+					Redim Preserve fieldNames(  fldIndex )
+				End If		
+				fieldNames( fldIndex) = field
+			End Forall
+			Write #fileNum%,   headerstring & |,"| & "Attachments" 
+			headerInnerFlds =""
+			headerstring=""
+			'End If 'end Not (Isempty(form.Fields)) 
+			intRecords =0
+			selection = |Form="| & form.Name & |"|  	
+			Set collection = db.UnprocessedDocuments
+'			Set collection=db.Search(selection, Nothing, 0)
+			If collection.count >0 Then
+				Set doc = collection.GetFirstDocument
+				While Not (doc Is Nothing )	
+					values=""
+					newAttachments=""
+					szAttachmentNames  =""	
+					intRecords = intRecords + 1
+					intCount =0
+					intFileName=0
+					'1st pass
+					Print " Documents Processed=" & intRecords & " out of " & collection.Count  &  " client=" &doc.clientnumber(0) & " NoteId= " & doc.NoteID 	
+					'Forall formfield In form.Fields
+					For counter% = 1 To  fldIndex
+						formfield = fieldNames(counter%)
+						Set item=doc.getfirstitem(formfield) 
+						intCount = counter% +4
+						newvalue =""
+						If Not (item Is Nothing) Then
+							checkedvalue =""
+							If item.Type = RICHTEXT Then
+								If  Instr(1, item.Text, |"|, 5) <> 0 Then
+									newvalue = ReplaceSubstring(item.Text, |"|, |'|)
+								Else
+									newvalue =item.Text
+								End If								
+%REM
+								Set rf = doc.GetFirstItem( formfield )
+								newvalue =rf.GetFormattedText( True, 0 )
+%END REM
+								newAttachments = DetachEmbeddeObject (doc, formfield, form.name)
+								If szAttachmentNames="" Then
+									szAttachmentNames  = newAttachments
+								Else
+									If Not (newAttachments="") Then
+										szAttachmentNames  = szAttachmentNames & ";"  & newAttachments	
+									End If
+								End If
+							Else
+								intValue = 0
+								If Not ( Isnull(item.Values) Or  Isempty(item.Values) )  Then
+									Forall v In item.Values
+										intValue=intValue+1
+										If  Instr(1, Cstr(v), |"|, 5) <> 0 Then
+											checkedvalue = ReplaceSubstring(Cstr(v), |"|, |'|)
+										Else
+											checkedvalue=Cstr(v	)
+										End If
+										If intValue=1 Then
+											newvalue=checkedvalue	
+										Else
+											newvalue=newvalue & ";" & checkedvalue
+										End If
+									End Forall
+								End If 'end If Not ( Isnull(item.Values) Or  Isempty(item.Values) )  
+							End If 
+						End If 'end If Not (item Is Nothing)
+						If counter% = 1 Then
+							values = newvalue
+						Else
+							values=values & |","| & newvalue
+						End If		
+					Next 'end For counter% = 1 To fieldCount
+					'End Forall 'end Forall formfield In form.Fields
+					szInnerFields = Cstr(doc.NoteID) & |","|  & Cstr(doc.UniversalID) & |","| &  Cstr(doc.Created) & |","| & Cstr(doc.LastModified)
+					values=szInnerFields &  |","| & values
+					Write #fileNum%,  values & |","| & szAttachmentNames
+					values=""
+					szInnerFields =""
+Next1:						
+				'Next  'end For x = 1 To collection.count
+					Set doc = collection.GetNextDocument ( doc)
+				Wend
+				szRecords = "Befor Aliaz: form =" &  form.name & " Total Records =" & intRecords
+			End If 'end If collection.count >0 Then
+			Close fileNum%
+			Call NotifyFailure ( session, "form=" & form.name & "; total fields =" & fldIndex, szRecords & "; collection count=" & collection.Count, msgString )
+			'Call NotifyFailure ( session, form.name, "strLogin1", msgString2 )
+		End If 'end Not (form.IsSubForm)
+NextForm:	
+	End Forall 'end Forall form In db.Forms
+	Exit Sub	
+Error_Handler:
+	strErrorMsg = strErrorMsg & " Error ( " + Cstr ( Err ) + " - " + Cstr ( Error ( Err ) ) + " - in Initialize - line #" + Cstr ( Erl ) + " )"
+	'strErrorMsg = strErrorMsg & " _doc.form =" & doc.form(0) & " aliaz="& aiaz & " ClientNumber=" & doc.ClientNumber(0) & " formfield=" & formfield & " newvalue=" & newvalue &  "noteID=" & doc.NoteID
+	strErrorMsg = strErrorMsg & " _doc.form =" & doc.form(0) & " aliaz="& aiaz & " ClientNumber=" & doc.ClientNumber(0) & " formfield=" & formfield &  "noteID=" & doc.NoteID & "_ intFileName=" &  intFileName
+	Print  strErrorMsg
+	' if error has occurred send notification
+	strLogin1 = "actioned by" & session.CommonUserName
+	Call NotifyFailure ( session, "strDir1", "strLogin1", strErrorMsg )
+	Resume Next 
+End Sub
+Function DetachEmbeddeObject(doc As NotesDocument, fldName As String, formName As String)  As String
+	Dim  rtitem As NotesRichTextItem
+	Dim oleObj As Variant
+	Dim attachmentNameList As String
+	Dim fileCount As Integer
+	Dim sName As String
+	Dim rhandle As Variant
+	Dim session As NotesSession
+	Set session = doc.ParentDatabase.Parent
+	On Error Goto Error_Handler2  ' for checking purpose  -If there is no error emailed then will get the same results as  On Error  Resume Next 
+	Set rtitem = doc.GetFirstItem( fldName )	
+	fileName = db.Title & "_" & formName &"_" & doc.UniversalID
+	attachmentName  =""	
+	fileExtension =""
+	attachmentNameList =""
+	DetachEmbeddeObject =""
+	fileCount =0
+	If Not ( rtitem Is Nothing) Then
+		If Not (Isempty(rtitem.EmbeddedObjects)) Then
+			attachmentName = attachmentFolder & fileName 
+			Forall o In rtitem.EmbeddedObjects
+				fileCount =  fileCount +1
+				If ( o.Type = EMBED_ATTACHMENT ) Then
+					'attachmentName = attachmentFolder & fileName  & "_" & o.source
+					sName =""
+					If Len (Cstr(o.Source)) >195 Then
+						sName = Left(Cstr(o.Source), 195)
+						intFileName = intFileName + 1
+						msgString = msgString & "_intFileName=" & intFileName
+					Else 
+						sName =Cstr(o.Source)
+					End If
+					'Call o.ExtractFile( attachmentName & "_" & o.source )
+					Call o.ExtractFile( attachmentName & "_" & sName )
+					'values=values &  |"| & attachmentName
+					If  fileCount = 1Then
+						'attachmentNameList = fileName  & "_" & o.source
+						attachmentNameList = fileName  & "_" & sName
+					Else
+						'attachmentNameList = attachmentNameList & ";" & fileName  & "_" & o.source
+						attachmentNameList = attachmentNameList & ";" & fileName  & "_" & sName
+					End If
+				Else
+					If (o.Type = EMBED_OBJECT Or o.Type = EMBED_OBJECTLINK) Then						
+						Set rhandle  = Nothing
+						Set rhandle = o.Activate(False)       
+						'Set rhandle = o.Activate(True)  
+						If  rhandle Is Nothing Then
+							strErrorMsg = "rhandle is nothing-can't activate:  Error ( " + Cstr ( Err ) + " - " + Cstr ( Error ( Err ) ) + " - in DetachEmbeddeObject - line #" + Cstr ( Erl ) + " ) "
+							strErrorMsg = strErrorMsg & " _doc.form =" & doc.form(0) & " ClientNumber=" & doc.ClientNumber(0) & " RTfield=" & fldName  &  "noteID=" & doc.NoteID & "_ intFileName=" &  intFileName & "attachmentNameList=" & attachmentNameList
+							strLogin1 = "actioned by" & session.CommonUserName
+							Call NotifyFailure ( session, "strDir1", "strLogin1", strErrorMsg )
+						Else
+							If Left$(o.class, 13)="Word.Document" Then 
+								fileExtension = ".doc"
+								rhandle.ActiveWindow.Visible = True							
+								'If rhandle.Options.WarnBeforeSavingPrintingSendingMarkup  Then
+							'	Call NotifyFailure ( session, "strDir1", "strLogin1", "rhandle.Options.WarnBeforeSavingPrintingSendingMarkup is true" )
+								'	rhandle.Options.WarnBeforeSavingPrintingSendingMarkup = False
+								'End If
+							Elseif Left$(o.class,13)="Excel.Sheet" Then 
+								fileExtension  = ".xls"
+								rhandle.Application.Windows( rhandle.Application.Wind​ows.Count).Visible = True
+							Else
+								msgString = msgString & " new class=" & o.class
+								strErrorMsg = strErrorMsg & " new class=" & o.class
+							End If 
+							Call  rhandle.SaveAs(attachmentName & "_" & o.name &  fileExtension)
+							If Not ( Dir$( attachmentName & "_" & o.name &  fileExtension, 0 ) = "") Then
+								If  fileCount = 1Then
+									attachmentNameList = fileName & "_" & o.name &  fileExtension
+								Else
+									attachmentNameList = attachmentNameList & ";" & fileName & "_" & o.name &  fileExtension
+								End If
+								'If fileExtension = ".doc" Then
+								'	rhandle.ActiveWindow.Close(WdSaveOptions.wdDoNotSaveChanges)
+								'End If	
+							End If
+							Call rhandle.Close
+							fileExtension=""
+						'Call rhandle .Quit
+						'Call rhandle .Application.Quit
+							Set rhandle  = Nothing
+						End If 'END If  rhandle Is Nothing 
+					End If	'End If (o.Type = EMBED_OBJECT Or o.Type = EMBED_OBJECTLINK) 						
+				End If 'End If ( o.Type = EMBED_ATTACHMENT ) 
+			End Forall
+			DetachEmbeddeObject =attachmentNameList
+		End If	'End If Not (Isempty(rtitem.EmbeddedObjects))
+	End If  'End If Not ( rtitem Is Nothing)
+	Exit Function	
+Error_Handler2:
+	strErrorMsg = " Error ( " + Cstr ( Err ) + " - " + Cstr ( Error ( Err ) ) + " - in DetachEmbeddeObject - line #" + Cstr ( Erl ) + " )"
+	strErrorMsg = strErrorMsg & " _doc.form =" & doc.form(0) & " ClientNumber=" & doc.ClientNumber(0) & " RTfield=" & fldName  &  "noteID=" & doc.NoteID & "_ intFileName=" &  intFileName & "attachmentNameList=" & attachmentNameList
+	Print  strErrorMsg
+	' if error has occurred send notification
+	strLogin1 = "actioned by" & session.CommonUserName
+	Call NotifyFailure ( session, "strDir1", "strLogin1", strErrorMsg )
+	Resume Next 
+End Function
+Sub NotifyFailure ( session As NotesSession, strDir As String, strLogin As String, message As String )
+	Dim agent As NotesAgent	
+	Dim docMemo As NotesDocument			
+	Dim rtitem As NotesRichTextItem				
+	Dim strAgentName As String					
+	Dim strSendTo As String
+	strSendTo = "Subroto Pant"
+	Set agent = session.CurrentAgent				
+	strAgentName = agent.Name
+	Print "Agent: " & strAgentName & " --- Notify Failure 1 --- " & message
+	' create the email
+	Set docMemo = db.CreateDocument
+	docMemo.form = "Memo" 
+	docMemo.subject = "Log: " & agent.Name
+	Set rtitem = docMemo.CreateRichTextItem ( "Body" )
+	Call rtitem.AddNewline ( 1 )
+	Call rtitem.AppendText ( "Notes Database: " & db.FilePath & " - " & db.Title )
+	Call rtitem.AddNewline ( 2 )
+	Call rtitem.AppendText ( "Documents processed: " )
+	Call rtitem.AddNewline ( 2 )
+	Call rtitem.AppendText ( "1. Head info: " & strDir )
+	Call rtitem.AddNewline ( 2 )
+	Call rtitem.AppendText ( "2. Recodrs: " & strLogin )
+'	Print "Notes Database: " & db.Title
+	Call rtitem.AddNewline ( 4 )
+	Call rtitem.AddNewline ( 2 )
+	Call rtitem.AppendText ( "Agent: " & agent.Name )
+	Call rtitem.AddNewline ( 2 )	
+	Call rtitem.AppendText ( String$ ( 75, "-" ) )	
+	Call rtitem.AddNewline ( 3 )
+	' paste the error msg	
+	Call rtitem.AppendText ( message )
+	Call rtitem.AddNewline ( 2 )		
+	Call rtitem.AppendText ( String$ ( 75, "-" ) )
+	Call rtitem.AddNewline ( 3 )
+	docMemo.sendTo =strSendTo
+	docMemo.Send ( False )
+End Sub
+Function GetValues(valueList As Variant)
+	Forall value In valueList
+		GetNames = GetNames & ", " & value
+	End Forall
+	GetNames = Mid$(GetNames, 3) 'to strip off the first unnecessary delimiter
+End Function
+Function ReplaceSubstring(inputStr As String, fromStr As String, toStr As String) As String
+' This function acts similarly to the @Formula language function '@ReplaceSubstring'
+	Dim newStr As String
+	'Dim position As Integer
+	Dim position As Long
+	newStr = inputStr
+	'While Instr(newStr, fromStr) > 0
+	While Instr(newStr, fromStr) <> 0
+		position = Instr(newStr, fromStr)
+		newStr = Left$(newStr, position - 1) + toStr + Right$(newStr, Len(newStr) - (position + Len(fromStr) - 1))
+	Wend
+	ReplaceSubstring = newStr
+End Function
+	
