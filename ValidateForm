@@ -1,0 +1,56 @@
+Function ValidateForm(doc As NotesDocument, aMandatoryFields() As Variant) As Integer
+%REM
+This function is used to validate a form to see if all the mandatory fields have been entered
+%END REM
+	
+	On Error Goto ErrHandler
+	
+     'default true
+	ValidateForm = False
+	Dim i As Integer
+	Dim j As Integer
+	
+	Dim sMsg As String
+	Dim bFormNotComplete As Integer
+	Dim item As NotesItem
+	
+	bFormNotComplete = False
+	sMsg = "Error! You must enter a value for : " + Chr(10)         
+	
+	For i = 0 To Ubound(aMandatoryFields)
+		
+		Set item = doc.GetFirstItem( aMandatoryFields(i, Lbound(aMandatoryFields))  )
+		If item.values(0) = "" Then
+			sMsg = sMsg +  aMandatoryFields(i, Lbound(aMandatoryFields) + 1 ) + Chr(10)         
+			bFormNotComplete = True          
+		End If
+		
+		For j = 0 To Lbound(aMandatoryFields) + 1   
+			Print aMandatoryFields(i,j)
+		Next
+	Next
+	
+	
+	If bFormNotComplete Then
+		Messagebox sMsg,,"Form not completed"
+		ValidateForm = False
+	Else
+		ValidateForm = True
+	End If
+	Exit Function
+	
+ErrHandler:
+	Dim x As Integer
+	x% = Erl()
+	If Err <> 0 Then
+		Print "On line " & x%
+		Print "Error" & Str(Err) & ": " & Error$         
+	End If
+	
+     'validation failed
+	Messagebox "Incorrect value entered for " +  aMandatoryFields(i, 1) 
+	ValidateForm = False
+	Exit Function
+	
+	
+End Function
