@@ -17,6 +17,7 @@ Sub DoInsertSort ( sA() As String, Byval bottom As Long, Byval top As Long )
 		sA (x) = v
 	Next
 End Sub
+
 Public Function QuickSort(sArray As Variant) As Variant
 	Dim sA() As String    
 	Dim j As Long
